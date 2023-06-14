@@ -19,6 +19,7 @@ from math import sqrt
 import datetime
 import argparse
 import os
+import time
 
 """
 GraphRec: Graph Neural Networks for Social Recommendation. 
@@ -119,14 +120,26 @@ def test(model, device, test_loader):
 
 
 def main():
+
     # Training settings
     parser = argparse.ArgumentParser(description='Social Recommendation: GraphRec model')
+    parser.add_argument('--dataset', type=str, default='./data/toy_dataset', \
+                        metavar='dir_path', help='path to the dataset')
     parser.add_argument('--batch_size', type=int, default=128, metavar='N', help='input batch size for training')
     parser.add_argument('--embed_dim', type=int, default=64, metavar='N', help='embedding size')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate')
     parser.add_argument('--test_batch_size', type=int, default=1000, metavar='N', help='input batch size for testing')
     parser.add_argument('--epochs', type=int, default=100, metavar='N', help='number of epochs to train')
+    parser.add_argument('--unseeded', action='store_true', help='if set, the argument seed is ignored')
+    parser.add_argument('--seed', type=int, default=42, metavar='N', help='seed for the random generation')
     args = parser.parse_args()
+
+
+    #Reproducibility setting
+    if not args.unseeded:
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        random.seed(args.seed)
 
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     use_cuda = False
@@ -135,7 +148,7 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
 
     embed_dim = args.embed_dim
-    dir_data = './data/toy_dataset'
+    dir_data = args.dataset
 
     path_data = dir_data + ".pickle"
     data_file = open(path_data, 'rb')
@@ -192,6 +205,7 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
 
+        start = time.time()
         train(graphrec, device, train_loader, optimizer, epoch, best_rmse, best_mae)
         expected_rmse, mae = test(graphrec, device, test_loader)
         # please add the validation set to tune the hyper-parameters based on your datasets.
@@ -203,7 +217,8 @@ def main():
             endure_count = 0
         else:
             endure_count += 1
-        print("rmse: %.4f, mae:%.4f " % (expected_rmse, mae))
+        epoch_time= time.time() - start
+        print("Epoch: %d, rmse: %.4f, mae:%.4f, time: %.4f " % (epoch, expected_rmse, mae, epoch_time))
 
         if endure_count > 5:
             break
