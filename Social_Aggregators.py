@@ -20,22 +20,25 @@ class Social_Aggregator(nn.Module):
         self.embed_dim = embed_dim
         self.att = Attention(self.embed_dim)
 
-    def forward(self, nodes, to_neighs):
-        embed_matrix = torch.empty(len(nodes), self.embed_dim, dtype=torch.float).to(self.device)
-        for i in range(len(nodes)):
-            tmp_adj = to_neighs[i]
-            num_neighs = len(tmp_adj)
-            # 
-            e_u = self.u2e.weight[list(tmp_adj)] # fast: user embedding 
-            #slow: item-space user latent factor (item aggregation)
-            #feature_neigbhors = self.features(torch.LongTensor(list(tmp_adj)).to(self.device))
-            #e_u = torch.t(feature_neigbhors)
+    def forward(self, nodes, to_neighs, to_neighs_mask):
+        e_u = self.u2e(to_neighs) * to_neighs_mask.unsqueeze(2).repeat(1, 1, self.embed_dim)
+        u_rep = self.u2e(nodes)
+        att = self.att(e_u, u_rep, to_neighs_mask)
+        to_feats = torch.sum(e_u * att.unsqueeze(-1), dim=1)
+        # embed_matrix = torch.empty(len(nodes), self.embed_dim, dtype=torch.float).to(self.device)
+        # for i in range(len(nodes)):
+        #     tmp_adj = to_neighs[i]
+        #     num_neighs = len(tmp_adj)
+        #     # 
+        #     e_u = self.u2e.weight[list(tmp_adj)] # fast: user embedding 
+        #     #slow: item-space user latent factor (item aggregation)
+        #     #feature_neigbhors = self.features(torch.LongTensor(list(tmp_adj)).to(self.device))
+        #     #e_u = torch.t(feature_neigbhors)
 
-            u_rep = self.u2e.weight[nodes[i]]
+        #     u_rep = self.u2e.weight[nodes[i]]
 
-            att_w = self.att(e_u, u_rep, num_neighs)
-            att_history = torch.mm(e_u.t(), att_w).t()
-            embed_matrix[i] = att_history
-        to_feats = embed_matrix
-
+        #     att_w = self.att(e_u, u_rep, num_neighs)
+        #     att_history = torch.mm(e_u.t(), att_w).t()
+        #     embed_matrix[i] = att_history
+        # to_feats = embed_matrix
         return to_feats

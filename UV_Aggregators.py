@@ -24,33 +24,19 @@ class UV_Aggregator(nn.Module):
         self.w_r2 = nn.Linear(self.embed_dim, self.embed_dim)
         self.att = Attention(self.embed_dim)
 
-    def forward(self, nodes, history_uv, history_r):
+    def forward(self, nodes, history_uv, history_uv_mask, history_r, history_r_mask):
+        dim_mask = history_uv_mask.unsqueeze(2).repeat(1, 1, self.embed_dim)
+        if self.uv == True:
+            e_uv = self.v2e(history_uv) * dim_mask
+            uv_rep = self.u2e(nodes)
+        else: 
+            e_uv = self.u2e(history_uv) * dim_mask
+            uv_rep = self.v2e(nodes)
+        e_r = self.r2e(history_r) * dim_mask
+        x = torch.cat((e_uv, e_r), -1)
+        x = F.relu(self.w_r1(x))
+        o_history = F.relu(self.w_r2(x))
 
-        embed_matrix = torch.empty(len(history_uv), self.embed_dim, dtype=torch.float).to(self.device)
-
-        for i in range(len(history_uv)):
-            history = history_uv[i]
-            num_histroy_item = len(history)
-            tmp_label = history_r[i]
-
-            if self.uv == True:
-                # user component
-                e_uv = self.v2e.weight[history]
-                uv_rep = self.u2e.weight[nodes[i]]
-            else:
-                # item component
-                e_uv = self.u2e.weight[history]
-                uv_rep = self.v2e.weight[nodes[i]]
-
-            e_r = self.r2e.weight[tmp_label]
-            x = torch.cat((e_uv, e_r), 1)
-            x = F.relu(self.w_r1(x))
-            o_history = F.relu(self.w_r2(x))
-
-            att_w = self.att(o_history, uv_rep, num_histroy_item)
-            att_history = torch.mm(o_history.t(), att_w)
-            att_history = att_history.t()
-
-            embed_matrix[i] = att_history
-        to_feats = embed_matrix
-        return to_feats
+        att_w = self.att(o_history, uv_rep, history_uv_mask)
+        att_history = torch.sum(o_history * att_w.unsqueeze(-1), dim=1)
+        return att_history
