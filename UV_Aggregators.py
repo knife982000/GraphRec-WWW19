@@ -25,7 +25,7 @@ class UV_Aggregator(nn.Module):
         self.att = Attention(self.embed_dim)
 
     def forward(self, nodes, history_uv, history_uv_mask, history_r, history_r_mask):
-        dim_mask = history_uv_mask.unsqueeze(2).repeat(1, 1, self.embed_dim)
+        dim_mask = history_uv_mask.unsqueeze(2)#.repeat(1, 1, self.embed_dim)
         if self.uv == True:
             e_uv = self.v2e(history_uv) * dim_mask
             uv_rep = self.u2e(nodes)

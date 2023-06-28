@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.nn import init
 import torch.nn.functional as F
 import numpy as np
+from Functions import masked_independent_shuffle, masked_shuffle
 
 class UV_Encoder(nn.Module):
 
@@ -11,7 +12,8 @@ class UV_Encoder(nn.Module):
 
         self.features = features
         self.uv = uv
-        max_len = max(len(x) for x in history_uv_lists.values())
+        self.max_len = torch.from_numpy(np.asarray([len(x) for x in history_uv_lists.values()])).long()
+        max_len = torch.max(self.max_len).item()
         self.history_uv_lists = np.zeros((len(history_uv_lists), max_len), dtype=np.int64)
         self.history_uv_lists_mask = np.zeros((len(history_uv_lists), max_len), dtype=np.int8)
         for i, l in history_uv_lists.items():
@@ -38,10 +40,19 @@ class UV_Encoder(nn.Module):
         self.linear1 = nn.Linear(2 * self.embed_dim, self.embed_dim)  #
 
     def forward(self, nodes):
-        tmp_history_uv = self.history_uv_lists[nodes.cpu(), :].to(self.device)
-        tmp_history_uv_mask = self.history_uv_lists_mask[nodes.cpu(), :].to(self.device)
-        tmp_history_r = self.history_r_lists[nodes.cpu(), :].to(self.device)
-        tmp_history_r_mask = self.history_r_lists_mask[nodes.cpu(), :].to(self.device)
+        cpu_nodes = nodes.cpu()
+        max_size = max(torch.max(self.max_len[cpu_nodes]).item(), 2)
+        tmp_history_uv = self.history_uv_lists[cpu_nodes, :max_size].to(self.device)
+        tmp_history_uv_mask = self.history_uv_lists_mask[cpu_nodes, :max_size].to(self.device)
+        tmp_history_r = self.history_r_lists[cpu_nodes, :max_size].to(self.device)
+        tmp_history_r_mask = self.history_r_lists_mask[cpu_nodes, :max_size].to(self.device)
+        
+        #Reduce neighbors
+        if max_size > 64:
+            tmp_history_uv = masked_independent_shuffle(tmp_history_uv, tmp_history_uv_mask)[:, :64]
+            tmp_history_uv_mask = tmp_history_uv_mask[:, :64]
+            tmp_history_r = masked_independent_shuffle(tmp_history_r, tmp_history_r_mask)[:, :64]
+            tmp_history_r_mask = tmp_history_r_mask[:, :64]
 
         neigh_feats = self.aggregator.forward(nodes, tmp_history_uv, tmp_history_uv_mask,\
                                               tmp_history_r, tmp_history_r_mask)  # user-item network

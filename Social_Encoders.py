@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.nn import init
 import torch.nn.functional as F
 import numpy as np
+from Functions import masked_independent_shuffle, masked_shuffle
 
 class Social_Encoder(nn.Module):
 
@@ -10,7 +11,8 @@ class Social_Encoder(nn.Module):
         super(Social_Encoder, self).__init__()
 
         self.features = features
-        max_len = max(len(x) for x in social_adj_lists.values())
+        self.max_len = torch.from_numpy(np.asarray([len(x) for x in social_adj_lists.values()])).long()
+        max_len = torch.max(self.max_len).item()
         self.social_adj_lists = np.zeros((len(social_adj_lists), max_len), dtype=np.int64)
         self.social_mask = np.zeros((len(social_adj_lists), max_len), dtype=np.int8)
         for i, l in social_adj_lists.items():
@@ -27,9 +29,16 @@ class Social_Encoder(nn.Module):
         self.linear1 = nn.Linear(2 * self.embed_dim, self.embed_dim)  #
 
     def forward(self, nodes: torch.Tensor):
+        cpu_nodes = nodes.cpu()
+        max_size = max(torch.max(self.max_len[cpu_nodes]).item(), 2)
+        to_neighs = self.social_adj_lists[cpu_nodes, :max_size].to(self.device)
+        to_neighs_mask = self.social_mask[cpu_nodes, :max_size].to(self.device)
 
-        to_neighs = self.social_adj_lists[nodes.cpu(), :].to(self.device)
-        to_neighs_mask = self.social_mask[nodes.cpu(), :].to(self.device)
+        #Reduce neighbors
+        if max_size > 64:
+            to_neighs = masked_independent_shuffle(to_neighs, to_neighs_mask)[:, :64]
+            to_neighs_mask = to_neighs_mask[:, :64]
+
         neigh_feats = self.aggregator.forward(nodes, to_neighs, to_neighs_mask)  # user-user network
 
         self_feats = self.features(nodes).to(self.device)

@@ -20,7 +20,7 @@ class Attention(nn.Module):
         num_neighs = node1.shape[1] #History lenght
         uv_reps = u_rep.unsqueeze(1).repeat(1, num_neighs, 1)
         to_neighs_mask = to_neighs_mask.unsqueeze(2)
-        to_neighs_mask_dim = to_neighs_mask.repeat(1, 1, self.embed_dim)
+        to_neighs_mask_dim = to_neighs_mask#.repeat(1, 1, self.embed_dim)
         x = torch.cat((node1, uv_reps), -1)
         x = F.relu(self.att1(x) * to_neighs_mask_dim)
         x = F.dropout(x, training=self.training)

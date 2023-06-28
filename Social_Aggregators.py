@@ -21,7 +21,7 @@ class Social_Aggregator(nn.Module):
         self.att = Attention(self.embed_dim)
 
     def forward(self, nodes, to_neighs, to_neighs_mask):
-        e_u = self.u2e(to_neighs) * to_neighs_mask.unsqueeze(2).repeat(1, 1, self.embed_dim)
+        e_u = self.u2e(to_neighs) * to_neighs_mask.unsqueeze(2)#.repeat(1, 1, self.embed_dim)
         u_rep = self.u2e(nodes)
         att = self.att(e_u, u_rep, to_neighs_mask)
         to_feats = torch.sum(e_u * att.unsqueeze(-1), dim=1)
